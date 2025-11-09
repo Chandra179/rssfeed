@@ -1,4 +1,5 @@
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Menu } from 'lucide-react';
+import { Item } from '../types/index';
 
 const ItemsList: React.FC<{
   items: Item[];
@@ -9,11 +10,20 @@ const ItemsList: React.FC<{
   getFeedTitle: (feedId: string) => string;
   onSelectItem: (item: Item) => void;
   onRefresh: () => void;
-}> = ({ items, selectedItem, loading, error, title, getFeedTitle, onSelectItem, onRefresh }) => (
-  <div className="w-96 bg-white border-r flex flex-col">
+  onToggleSidebar: () => void;
+}> = ({ items, selectedItem, loading, error, title, getFeedTitle, onSelectItem, onRefresh, onToggleSidebar }) => (
+  <div className="w-full md:w-96 bg-white border-r flex flex-col">
     <div className="p-4 border-b">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-lg font-bold">{title}</h2>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onToggleSidebar}
+            className="p-2 hover:bg-gray-100 rounded md:hidden"
+          >
+            <Menu size={20} />
+          </button>
+          <h2 className="text-lg font-bold">{title}</h2>
+        </div>
         <button
           onClick={onRefresh}
           disabled={loading}

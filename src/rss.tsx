@@ -22,6 +22,8 @@ const RSSReader: React.FC = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showAddFeed, setShowAddFeed] = useState(false);
   const [newFeedUrl, setNewFeedUrl] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showArticleView, setShowArticleView] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [storageWarning, setStorageWarning] = useState<{ show: boolean, percentage: number }>({ show: false, percentage: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -59,6 +61,15 @@ const RSSReader: React.FC = () => {
   const getFeedTitle = (feedId: string): string => {
     const feed = feeds.find(f => f.id === feedId);
     return feed?.title || 'Unknown Feed';
+  };
+
+  const handleSelectItem = (item: Item) => {
+    setSelectedItem(item);
+    setShowArticleView(true);
+  };
+
+  const handleBackToList = () => {
+    setShowArticleView(false);
   };
 
   const addFeed = async (url: string) => {
@@ -269,7 +280,7 @@ const RSSReader: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
       {storageWarning.show && (
         <StorageWarning 
           percentage={storageWarning.percentage}
@@ -278,8 +289,8 @@ const RSSReader: React.FC = () => {
       )}
       
       <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        isOpen={sidebarOpen}
+        onToggle={() => setSidebarOpen(!sidebarOpen)}
         feeds={feeds}
         allItems={allItems}
         selectedFeedFilter={selectedFeedFilter}
@@ -306,22 +317,39 @@ const RSSReader: React.FC = () => {
         />
       )}
       
-      <ItemsList
-        items={filteredItems}
-        selectedItem={selectedItem}
-        loading={loading}
-        error={error}
-        title={getListTitle()}
-        getFeedTitle={getFeedTitle}
-        onSelectItem={setSelectedItem}
-        onRefresh={refreshAllFeeds}
-      />
-      
-      <div className="flex-1 flex flex-col bg-white">
-        <ArticleView
-          item={selectedItem}
-          onToggleRead={toggleRead}
-        />
+      <div className="flex flex-1 overflow-hidden">
+        {/* Items List - Hidden on mobile when article is shown */}
+        <div className={`flex flex-col ${showArticleView ? 'hidden md:flex' : 'flex'}`}>
+          {sidebarOpen && showAddFeed && (
+            <AddFeedForm
+              url={newFeedUrl}
+              loading={loading}
+              onChange={setNewFeedUrl}
+              onSubmit={() => {}}
+            />
+          )}
+          
+          <ItemsList
+            items={filteredItems}
+            selectedItem={selectedItem}
+            loading={loading}
+            error={error}
+            title={getListTitle()}
+            getFeedTitle={getFeedTitle}
+            onSelectItem={handleSelectItem}
+            onRefresh={refreshAllFeeds}
+            onToggleSidebar={() => setSidebarOpen(true)}
+          />
+        </div>
+        
+        {/* Article View - Full screen on mobile when shown, always visible on desktop */}
+        <div className={`flex-1 flex flex-col bg-white ${showArticleView ? 'flex' : 'hidden md:flex'}`}>
+          <ArticleView
+            item={selectedItem}
+            onToggleRead={toggleRead}
+            onBack={handleBackToList}
+          />
+        </div>
       </div>
     </div>
   );
