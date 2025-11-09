@@ -19,7 +19,6 @@ const RSSReader: React.FC = () => {
   const [selectedFeedFilter, setSelectedFeedFilter] = useState<string | null>(null);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showAddFeed, setShowAddFeed] = useState(false);
   const [newFeedUrl, setNewFeedUrl] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -307,15 +306,6 @@ const RSSReader: React.FC = () => {
         className="hidden" 
         onChange={handleOPMLUpload}
       />
-      
-      {!sidebarCollapsed && showAddFeed && (
-        <AddFeedForm
-          url={newFeedUrl}
-          loading={loading}
-          onChange={setNewFeedUrl}
-          onSubmit={() => addFeed(newFeedUrl)}
-        />
-      )}
       
       <div className="flex flex-1 overflow-hidden">
         {/* Items List - Hidden on mobile when article is shown */}
