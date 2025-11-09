@@ -108,18 +108,12 @@ const ArticleView: React.FC<{
             {item.author && <span>{item.author} · </span>}
             <span>{new Date(item.publishedAt).toLocaleDateString()}</span>
           </div>
-          <button
-            onClick={() => onToggleRead(item)}
-            className={`px-3 py-1 text-sm rounded whitespace-nowrap ${item.read ? 'bg-gray-200' : 'bg-blue-500 text-white'}`}
-          >
-            {item.read ? 'Mark Unread' : 'Mark Read'}
-          </button>
         </div>
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div 
-          className="prose prose-sm sm:prose-base max-w-none mb-6 break-words"
+          className="prose prose-sm sm:prose-base max-w-full mb-6 break-words"
           dangerouslySetInnerHTML={{ __html: item.content }}
         />
         
