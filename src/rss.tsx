@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { RefreshCw, Plus, Upload, ChevronLeft, ChevronRight, AlertTriangle, X } from 'lucide-react';
+import { RefreshCw, Plus, Upload, ChevronLeft, ChevronRight, AlertTriangle, X, Filter } from 'lucide-react';
 import DOMPurify from 'dompurify';
 
 // Types
@@ -99,6 +99,21 @@ const saveItems = async (items: Item[]): Promise<void> => {
   return new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
+  });
+};
+
+const loadAllItems = async (): Promise<Item[]> => {
+  const db = await openDB();
+  const tx = db.transaction('items', 'readonly');
+  const store = tx.objectStore('items');
+  const request = store.getAll();
+  
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => {
+      const items = request.result;
+      resolve(items.sort((a, b) => b.publishedAt - a.publishedAt));
+    };
+    request.onerror = () => reject(request.error);
   });
 };
 
@@ -268,8 +283,11 @@ const checkStorageQuota = async (): Promise<{ used: number, total: number, perce
 // Main component
 const RSSReader: React.FC = () => {
   const [feeds, setFeeds] = useState<Feed[]>([]);
-  const [selectedFeed, setSelectedFeed] = useState<Feed | null>(null);
-  const [items, setItems] = useState<Item[]>([]);
+  const [allItems, setAllItems] = useState<Item[]>([]);
+  const [filteredItems, setFilteredItems] = useState<Item[]>([]);
+  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [selectedFeedFilter, setSelectedFeedFilter] = useState<string | null>(null);
+  const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [loading, setLoading] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showAddFeed, setShowAddFeed] = useState(false);
@@ -280,22 +298,37 @@ const RSSReader: React.FC = () => {
 
   useEffect(() => {
     loadFeeds().then(setFeeds);
+    loadAllItems().then(items => {
+      setAllItems(items);
+      setFilteredItems(items);
+    });
     checkStorage();
   }, []);
 
   useEffect(() => {
-    if (selectedFeed) {
-      loadItemsByFeed(selectedFeed.id).then(setItems);
-    } else {
-      setItems([]);
+    let filtered = allItems;
+    
+    if (selectedFeedFilter) {
+      filtered = filtered.filter(item => item.feedId === selectedFeedFilter);
     }
-  }, [selectedFeed]);
+    
+    if (showUnreadOnly) {
+      filtered = filtered.filter(item => !item.read);
+    }
+    
+    setFilteredItems(filtered);
+  }, [allItems, selectedFeedFilter, showUnreadOnly]);
 
   const checkStorage = async () => {
     const quota = await checkStorageQuota();
     if (quota.percentage >= 80) {
       setStorageWarning({ show: true, percentage: quota.percentage });
     }
+  };
+
+  const getFeedTitle = (feedId: string): string => {
+    const feed = feeds.find(f => f.id === feedId);
+    return feed?.title || 'Unknown Feed';
   };
 
   const addFeed = async (url: string) => {
@@ -364,6 +397,9 @@ const RSSReader: React.FC = () => {
       await saveItems(newItems);
       
       setFeeds([...feeds, newFeed]);
+      const updatedItems = await loadAllItems();
+      setAllItems(updatedItems);
+      
       setNewFeedUrl('');
       setShowAddFeed(false);
       await checkStorage();
@@ -382,11 +418,18 @@ const RSSReader: React.FC = () => {
     }
   };
 
+  const refreshAllFeeds = async () => {
+    setLoading(true);
+    for (const feed of feeds) {
+      await refreshFeed(feed);
+    }
+    const updatedItems = await loadAllItems();
+    setAllItems(updatedItems);
+    setLoading(false);
+  };
+
   const refreshFeed = async (feed: Feed) => {
     try {
-      setLoading(true);
-      setError(null);
-      
       const { feed: feedData, items: feedItems } = await fetchFeed(feed.url, feed.settings.fetchImages);
       
       const updatedFeed = { ...feed };
@@ -419,7 +462,6 @@ const RSSReader: React.FC = () => {
           totalSize += fullItem.sizeBytes;
           
           if (totalSize > feed.settings.maxSizeBytes) {
-            setError(`Feed reached 7MB limit. Some items were not loaded.`);
             break;
           }
           
@@ -435,10 +477,6 @@ const RSSReader: React.FC = () => {
       }
       
       setFeeds(feeds.map(f => f.id === feed.id ? updatedFeed : f));
-      if (selectedFeed?.id === feed.id) {
-        const allItems = await loadItemsByFeed(feed.id);
-        setItems(allItems);
-      }
       
       await checkStorage();
     } catch (err: any) {
@@ -448,25 +486,19 @@ const RSSReader: React.FC = () => {
       if (err.message === 'not_found') {
         updatedFeed.lastFetchStatus = 'not_found';
         updatedFeed.lastFetchError = 'Feed not found (404)';
-        setError('Feed not found (404)');
       } else if (err.message === 'malformed_xml') {
         updatedFeed.lastFetchStatus = 'malformed_xml';
         updatedFeed.lastFetchError = 'Invalid RSS/Atom format';
-        setError('Invalid RSS/Atom feed format');
       } else if (err.name === 'TypeError') {
         updatedFeed.lastFetchStatus = 'cors_error';
         updatedFeed.lastFetchError = 'CORS error';
-        setError('CORS error: Cannot access feed');
       } else {
         updatedFeed.lastFetchStatus = 'timeout';
         updatedFeed.lastFetchError = err.message;
-        setError(err.message);
       }
       
       await saveFeeds([updatedFeed]);
       setFeeds(feeds.map(f => f.id === feed.id ? updatedFeed : f));
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -489,12 +521,14 @@ const RSSReader: React.FC = () => {
   const toggleRead = async (item: Item) => {
     const updated = { ...item, read: !item.read };
     await updateItem(updated);
-    setItems(items.map(i => i.id === item.id ? updated : i));
+    setAllItems(allItems.map(i => i.id === item.id ? updated : i));
+    if (selectedItem?.id === item.id) {
+      setSelectedItem(updated);
+    }
   };
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* Storage Warning Banner */}
       {storageWarning.show && (
         <div className="fixed top-0 left-0 right-0 bg-yellow-500 text-white px-4 py-2 flex items-center justify-between z-50">
           <div className="flex items-center gap-2">
@@ -507,7 +541,7 @@ const RSSReader: React.FC = () => {
         </div>
       )}
       
-      {/* Sidebar */}
+      {/* Left Sidebar - Feed List */}
       <div className={`bg-white border-r transition-all duration-300 ${sidebarCollapsed ? 'w-12' : 'w-64'} flex flex-col`}>
         <div className="p-4 border-b flex items-center justify-between">
           {!sidebarCollapsed && <h1 className="text-xl font-bold">RSS Reader</h1>}
@@ -560,101 +594,155 @@ const RSSReader: React.FC = () => {
                 </button>
               </div>
             )}
+
+            <div className="p-4 border-b">
+              <div className="flex items-center gap-2 mb-3">
+                <Filter size={16} />
+                <span className="font-semibold text-sm">Filters</span>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedFeedFilter(null);
+                  setShowUnreadOnly(false);
+                }}
+                className={`w-full text-left px-3 py-2 rounded mb-1 ${!selectedFeedFilter && !showUnreadOnly ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-50'}`}
+              >
+                All posts
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedFeedFilter(null);
+                  setShowUnreadOnly(true);
+                }}
+                className={`w-full text-left px-3 py-2 rounded ${!selectedFeedFilter && showUnreadOnly ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-50'}`}
+              >
+                Unread
+              </button>
+            </div>
             
             <div className="flex-1 overflow-y-auto">
-              {feeds.map(feed => (
-                <div
-                  key={feed.id}
-                  onClick={() => setSelectedFeed(feed)}
-                  className={`p-4 border-b cursor-pointer hover:bg-gray-50 ${selectedFeed?.id === feed.id ? 'bg-blue-50' : ''}`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold truncate">{feed.title}</h3>
-                      <p className="text-xs text-gray-500 truncate">{feed.description}</p>
-                      {feed.lastFetchStatus !== 'success' && (
-                        <p className="text-xs text-red-500 mt-1">{feed.lastFetchStatus}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
+              <div className="p-2">
+                <p className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Feeds</p>
+                {feeds.map(feed => {
+                  const feedItemCount = allItems.filter(item => item.feedId === feed.id).length;
+                  return (
+                    <button
+                      key={feed.id}
+                      onClick={() => setSelectedFeedFilter(feed.id)}
+                      className={`w-full text-left px-3 py-2 rounded mb-1 ${selectedFeedFilter === feed.id ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-50'}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="truncate flex-1">{feed.title}</span>
+                        <span className="text-xs text-gray-500 ml-2">{feedItemCount}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </>
         )}
       </div>
       
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {selectedFeed && (
-          <div className="bg-white border-b p-4 flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold">{selectedFeed.title}</h2>
-              <p className="text-sm text-gray-500">{items.length} items</p>
-            </div>
+      {/* Middle Panel - Items List */}
+      <div className="w-96 bg-white border-r flex flex-col">
+        <div className="p-4 border-b">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-bold">
+              {selectedFeedFilter ? getFeedTitle(selectedFeedFilter) : showUnreadOnly ? 'Unread' : 'All posts'}
+            </h2>
             <button
-              onClick={() => refreshFeed(selectedFeed)}
+              onClick={refreshAllFeeds}
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300"
+              className="p-2 hover:bg-gray-100 rounded"
+              title="Refresh all feeds"
             >
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-              Refresh
             </button>
           </div>
-        )}
+          <p className="text-sm text-gray-500">{filteredItems.length} items</p>
+        </div>
         
         {error && (
-          <div className="bg-red-100 text-red-700 px-4 py-2 border-b">
+          <div className="bg-red-100 text-red-700 px-4 py-2 text-sm">
             {error}
           </div>
         )}
         
-        <div className="flex-1 overflow-y-auto p-4">
-          {!selectedFeed ? (
-            <div className="text-center text-gray-500 mt-20">
-              <p>Select a feed to view items</p>
-            </div>
-          ) : items.length === 0 ? (
-            <div className="text-center text-gray-500 mt-20">
-              <p>No items yet. Click refresh to load items.</p>
+        <div className="flex-1 overflow-y-auto">
+          {filteredItems.length === 0 ? (
+            <div className="text-center text-gray-500 mt-20 px-4">
+              <p>No items to display</p>
             </div>
           ) : (
-            <div className="space-y-4 max-w-4xl mx-auto">
-              {items.map(item => (
-                <div key={item.id} className={`bg-white rounded-lg shadow p-6 ${item.read ? 'opacity-60' : ''}`}>
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="text-lg font-semibold flex-1">{item.title}</h3>
-                    <button
-                      onClick={() => toggleRead(item)}
-                      className={`ml-4 px-3 py-1 text-sm rounded ${item.read ? 'bg-gray-200' : 'bg-blue-500 text-white'}`}
-                    >
-                      {item.read ? 'Unread' : 'Read'}
-                    </button>
+            filteredItems.map(item => (
+              <div
+                key={item.id}
+                onClick={() => setSelectedItem(item)}
+                className={`p-4 border-b cursor-pointer hover:bg-gray-50 ${selectedItem?.id === item.id ? 'bg-blue-50' : ''} ${item.read ? 'opacity-60' : ''}`}
+              >
+                <div className="flex items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-sm mb-1 line-clamp-2">{item.title}</h3>
+                    <p className="text-xs text-gray-500">
+                      {getFeedTitle(item.feedId)} · {new Date(item.publishedAt).toLocaleDateString()}
+                    </p>
                   </div>
-                  
-                  <div className="text-sm text-gray-500 mb-3">
-                    {item.author && <span>{item.author} • </span>}
-                    <span>{new Date(item.publishedAt).toLocaleDateString()}</span>
-                  </div>
-                  
-                  <div 
-                    className="prose prose-sm max-w-none mb-3"
-                    dangerouslySetInnerHTML={{ __html: item.content }}
-                  />
-                  
-                  <a 
-                    href={item.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-500 hover:underline text-sm"
-                  >
-                    Read more →
-                  </a>
+                  {!item.read && (
+                    <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-1"></div>
+                  )}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))
           )}
         </div>
+      </div>
+      
+      {/* Right Panel - Article Content */}
+      <div className="flex-1 flex flex-col bg-white">
+        {!selectedItem ? (
+          <div className="flex-1 flex items-center justify-center text-gray-500">
+            <div className="text-center">
+              <p className="text-lg mb-2">No post selected</p>
+              <p className="text-sm">Open a post in the bar to the left</p>
+              <p className="text-sm">to begin consuming feeds</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="p-6 border-b">
+              <h1 className="text-2xl font-bold mb-3">{selectedItem.title}</h1>
+              <div className="flex items-center justify-between text-sm text-gray-500">
+                <div>
+                  {selectedItem.author && <span>{selectedItem.author} · </span>}
+                  <span>{new Date(selectedItem.publishedAt).toLocaleDateString()}</span>
+                </div>
+                <button
+                  onClick={() => toggleRead(selectedItem)}
+                  className={`px-3 py-1 text-sm rounded ${selectedItem.read ? 'bg-gray-200' : 'bg-blue-500 text-white'}`}
+                >
+                  {selectedItem.read ? 'Mark Unread' : 'Mark Read'}
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6">
+              <div 
+                className="prose prose-sm max-w-none mb-6"
+                dangerouslySetInnerHTML={{ __html: selectedItem.content }}
+              />
+              
+              <a 
+                href={selectedItem.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                Read full article →
+              </a>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
