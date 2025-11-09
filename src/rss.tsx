@@ -62,9 +62,17 @@ const RSSReader: React.FC = () => {
     return feed?.title || 'Unknown Feed';
   };
 
-  const handleSelectItem = (item: Item) => {
+  const handleSelectItem = async (item: Item) => {
     setSelectedItem(item);
     setShowArticleView(true);
+    
+    // Auto-mark as read when selecting
+    if (!item.read) {
+      const updated = { ...item, read: true };
+      await updateItem(updated);
+      setAllItems(allItems.map(i => i.id === item.id ? updated : i));
+      setSelectedItem(updated);
+    }
   };
 
   const handleBackToList = () => {

@@ -1,11 +1,21 @@
 import { ArrowLeft } from 'lucide-react';
 import { Item } from '../types/index';
+import { useState, useEffect } from 'react';
 
 const ArticleView: React.FC<{
   item: Item | null;
   onToggleRead: (item: Item) => void;
   onBack: () => void;
 }> = ({ item, onToggleRead, onBack }) => {
+  const [useIframe, setUseIframe] = useState(true);
+  const [iframeError, setIframeError] = useState(false);
+
+  useEffect(() => {
+    // Reset iframe state when item changes
+    setUseIframe(true);
+    setIframeError(false);
+  }, [item?.id]);
+
   if (!item) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-500">
@@ -18,8 +28,38 @@ const ArticleView: React.FC<{
     );
   }
 
+  const handleIframeError = () => {
+    setIframeError(true);
+    setUseIframe(false);
+  };
+
+  // Try to use iframe first, fallback to HTML content if it fails
+  if (useIframe && !iframeError) {
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="p-4 border-b md:hidden">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-blue-500 hover:text-blue-600"
+          >
+            <ArrowLeft size={20} />
+            <span>Back to list</span>
+          </button>
+        </div>
+        <iframe
+          src={item.link}
+          className="flex-1 w-full border-0"
+          title={item.title}
+          onError={handleIframeError}
+          sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+        />
+      </div>
+    );
+  }
+
+  // Fallback to HTML content
   return (
-    <>
+    <div className="flex-1 flex flex-col overflow-hidden">
       <div className="p-4 md:p-6 border-b">
         <button
           onClick={onBack}
@@ -45,7 +85,7 @@ const ArticleView: React.FC<{
       
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div 
-          className="prose prose-sm max-w-none mb-6"
+          className="prose prose-sm sm:prose-base max-w-none mb-6 break-words"
           dangerouslySetInnerHTML={{ __html: item.content }}
         />
         
@@ -58,7 +98,7 @@ const ArticleView: React.FC<{
           Read full article →
         </a>
       </div>
-    </>
+    </div>
   );
 };
 
