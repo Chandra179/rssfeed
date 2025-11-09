@@ -12,8 +12,8 @@ const ItemsList: React.FC<{
   onRefresh: () => void;
   onToggleSidebar: () => void;
 }> = ({ items, selectedItem, loading, error, title, getFeedTitle, onSelectItem, onRefresh, onToggleSidebar }) => (
-  <div className="w-full md:w-96 bg-white border-r flex flex-col">
-    <div className="p-4 border-b">
+  <div className="w-full md:w-96 bg-white border-r flex flex-col h-full overflow-hidden">
+    <div className="p-4 border-b flex-shrink-0">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <button
@@ -37,12 +37,12 @@ const ItemsList: React.FC<{
     </div>
     
     {error && (
-      <div className="bg-red-100 text-red-700 px-4 py-2 text-sm">
+      <div className="bg-red-100 text-red-700 px-4 py-2 text-sm flex-shrink-0">
         {error}
       </div>
     )}
     
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 overflow-y-auto min-h-0">
       {items.length === 0 ? (
         <div className="text-center text-gray-500 mt-20 px-4">
           <p>No items to display</p>

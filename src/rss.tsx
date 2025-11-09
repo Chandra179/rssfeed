@@ -278,6 +278,8 @@ const RSSReader: React.FC = () => {
   const handleSelectFilter = (feedId: string | null, unreadOnly: boolean) => {
     setSelectedFeedFilter(feedId);
     setShowUnreadOnly(unreadOnly);
+    // Auto-close sidebar on mobile when selecting a filter
+    setSidebarOpen(false);
   };
 
   const getListTitle = () => {

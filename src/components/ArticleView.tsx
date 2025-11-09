@@ -1,6 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 import { Item } from '../types/index';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const ArticleView: React.FC<{
   item: Item | null;
@@ -9,12 +9,45 @@ const ArticleView: React.FC<{
 }> = ({ item, onToggleRead, onBack }) => {
   const [useIframe, setUseIframe] = useState(true);
   const [iframeError, setIframeError] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     // Reset iframe state when item changes
     setUseIframe(true);
     setIframeError(false);
+    
+    // Set a timeout to detect if iframe fails to load
+    const timeoutId = setTimeout(() => {
+      if (useIframe && !iframeError) {
+        // If iframe hasn't loaded after 2 seconds, assume it failed
+        setIframeError(true);
+        setUseIframe(false);
+      }
+    }, 2000);
+
+    return () => clearTimeout(timeoutId);
   }, [item?.id]);
+
+  useEffect(() => {
+    // Check if iframe loaded successfully
+    if (iframeRef.current && useIframe) {
+      const iframe = iframeRef.current;
+      
+      const handleLoad = () => {
+        try {
+          // Try to access iframe content to detect X-Frame-Options errors
+          iframe.contentWindow?.document;
+        } catch (e) {
+          // Cross-origin or X-Frame-Options blocked
+          setIframeError(true);
+          setUseIframe(false);
+        }
+      };
+      
+      iframe.addEventListener('load', handleLoad);
+      return () => iframe.removeEventListener('load', handleLoad);
+    }
+  }, [useIframe, item?.id]);
 
   if (!item) {
     return (
@@ -47,6 +80,7 @@ const ArticleView: React.FC<{
           </button>
         </div>
         <iframe
+          ref={iframeRef}
           src={item.link}
           className="flex-1 w-full border-0"
           title={item.title}
