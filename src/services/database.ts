@@ -1,3 +1,5 @@
+import { Feed, Item } from '../types/index';
+
 const DB_NAME = 'rss_reader';
 const DB_VERSION = 1;
 

@@ -57,11 +57,6 @@ const RSSReader: React.FC = () => {
     }
   };
 
-  const getFeedTitle = (feedId: string): string => {
-    const feed = feeds.find(f => f.id === feedId);
-    return feed?.title || 'Unknown Feed';
-  };
-
   const handleSelectItem = async (item: Item) => {
     setSelectedItem(item);
     setShowArticleView(true);
@@ -74,7 +69,7 @@ const RSSReader: React.FC = () => {
       setSelectedItem(updated);
     }
   };
-
+  
   const handleBackToList = () => {
     setShowArticleView(false);
   };
@@ -278,8 +273,11 @@ const RSSReader: React.FC = () => {
   const handleSelectFilter = (feedId: string | null, unreadOnly: boolean) => {
     setSelectedFeedFilter(feedId);
     setShowUnreadOnly(unreadOnly);
-    // Auto-close sidebar on mobile when selecting a filter
-    setSidebarOpen(false);
+  };
+
+  const getFeedTitle = (feedId: string): string => {
+    const feed = feeds.find(f => f.id === feedId);
+    return feed?.title || 'Unknown Feed';
   };
 
   const getListTitle = () => {
@@ -319,16 +317,7 @@ const RSSReader: React.FC = () => {
       
       <div className="flex flex-1 overflow-hidden">
         {/* Items List - Hidden on mobile when article is shown */}
-        <div className={`flex flex-col ${showArticleView ? 'hidden md:flex' : 'flex'}`}>
-          {sidebarOpen && showAddFeed && (
-            <AddFeedForm
-              url={newFeedUrl}
-              loading={loading}
-              onChange={setNewFeedUrl}
-              onSubmit={() => {}}
-            />
-          )}
-          
+        <div className={`flex flex-col ${showArticleView ? 'hidden md:flex' : 'flex'}`}>     
           <ItemsList
             items={filteredItems}
             selectedItem={selectedItem}
