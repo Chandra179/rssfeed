@@ -1,54 +1,11 @@
 import { ArrowLeft } from 'lucide-react';
 import { Item } from '../types/index';
-import { useState, useEffect, useRef } from 'react';
 
 const ArticleView: React.FC<{
   item: Item | null;
   onToggleRead: (item: Item) => void;
   onBack: () => void;
 }> = ({ item, onToggleRead, onBack }) => {
-  const [useIframe, setUseIframe] = useState(true);
-  const [iframeError, setIframeError] = useState(false);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-
-  useEffect(() => {
-    // Reset iframe state when item changes
-    setUseIframe(true);
-    setIframeError(false);
-    
-    // Set a timeout to detect if iframe fails to load
-    const timeoutId = setTimeout(() => {
-      if (useIframe && !iframeError) {
-        // If iframe hasn't loaded after 2 seconds, assume it failed
-        setIframeError(true);
-        setUseIframe(false);
-      }
-    }, 2000);
-
-    return () => clearTimeout(timeoutId);
-  }, [item?.id]);
-
-  useEffect(() => {
-    // Check if iframe loaded successfully
-    if (iframeRef.current && useIframe) {
-      const iframe = iframeRef.current;
-      
-      const handleLoad = () => {
-        try {
-          // Try to access iframe content to detect X-Frame-Options errors
-          iframe.contentWindow?.document;
-        } catch (e) {
-          // Cross-origin or X-Frame-Options blocked
-          setIframeError(true);
-          setUseIframe(false);
-        }
-      };
-      
-      iframe.addEventListener('load', handleLoad);
-      return () => iframe.removeEventListener('load', handleLoad);
-    }
-  }, [useIframe, item?.id]);
-
   if (!item) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-500">
@@ -57,36 +14,6 @@ const ArticleView: React.FC<{
           <p className="text-sm">Open a post in the list to the left</p>
           <p className="text-sm">to begin consuming feeds</p>
         </div>
-      </div>
-    );
-  }
-
-  const handleIframeError = () => {
-    setIframeError(true);
-    setUseIframe(false);
-  };
-
-  // Try to use iframe first, fallback to HTML content if it fails
-  if (useIframe && !iframeError) {
-    return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 border-b md:hidden">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-blue-500 hover:text-blue-600"
-          >
-            <ArrowLeft size={20} />
-            <span>Back to list</span>
-          </button>
-        </div>
-        <iframe
-          ref={iframeRef}
-          src={item.link}
-          className="flex-1 w-full border-0"
-          title={item.title}
-          onError={handleIframeError}
-          sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-        />
       </div>
     );
   }
@@ -112,8 +39,15 @@ const ArticleView: React.FC<{
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
-        <div 
-          className="prose prose-sm sm:prose-base max-w-full mb-6 break-words"
+        <div
+          className="
+            prose prose-sm sm:prose-base max-w-none w-full
+            break-words
+            [&_*]:break-words
+            [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_pre]:max-w-full
+            [&_code]:whitespace-pre-wrap [&_code]:break-words
+            overflow-x-auto
+          "
           dangerouslySetInnerHTML={{ __html: item.content }}
         />
         
@@ -131,3 +65,4 @@ const ArticleView: React.FC<{
 };
 
 export default ArticleView;
+

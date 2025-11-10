@@ -75,8 +75,14 @@ const calculateSize = (obj: any): number => {
 const sanitizeHTML = (html: string, fetchImages: boolean): string => {
   const DOMPurify = (window as any).DOMPurify;
   const config: any = {
-    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'a', 'ul', 'ol', 'li', 'blockquote', 'code', 'pre', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
-    ALLOWED_ATTR: ['href', 'target', 'rel'],
+    ALLOWED_TAGS: [
+      'p', 'br', 'strong', 'em', 'u', 'a', 'ul', 'ol', 'li',
+      'blockquote', 'code', 'pre', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'img', 'figure', 'figcaption', 'video', 'iframe', 'div', 'span'
+    ],
+    ALLOWED_ATTR: [
+      'href', 'target', 'rel', 'src', 'alt', 'title', 'width', 'height', 'loading', 'class', 'style'
+    ],
     RETURN_TRUSTED_TYPE: false
   };
   
@@ -85,5 +91,10 @@ const sanitizeHTML = (html: string, fetchImages: boolean): string => {
     config.ALLOWED_ATTR.push('src', 'alt');
   }
   
-  return DOMPurify.sanitize(html, config);
+  let output = DOMPurify.sanitize(html, config);
+  output = output
+    .replaceAll('<img ', '<img class="max-w-full h-auto mx-auto" loading="lazy" ')
+    .replaceAll('<iframe ', '<iframe class="w-full aspect-video" ');
+
+  return output;
 };
